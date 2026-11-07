@@ -1,0 +1,27 @@
+{
+  "name": "nowplaying-overlay",
+  "version": "2.1.0",
+  "description": "Оверлей «сейчас играет» для ПК: трек и управление плеером телефона",
+  "author": "NowPlaying",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "dist": "electron-builder --win portable --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.example.nowplaying",
+    "productName": "NowPlaying",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "server.js", "ui/**/*", "tray.png", "package.json"],
+    "win": {
+      "icon": "icon.png",
+      "target": ["portable"],
+      "artifactName": "NowPlaying.${ext}"
+    }
+  }
+}
