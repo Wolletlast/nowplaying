@@ -1,0 +1,49 @@
+name: Build NowPlaying
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        run: gradle -p android assembleDebug --no-daemon --stacktrace
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk NowPlaying.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NowPlaying-Android
+          path: NowPlaying.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+        working-directory: pc
+      - name: Build portable exe
+        run: npm run dist
+        working-directory: pc
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NowPlaying-Windows
+          path: pc/dist/NowPlaying.exe
