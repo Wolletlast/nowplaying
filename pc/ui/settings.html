@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NowPlaying — настройки</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #101218; color: #e9ebf0; font: 14px/1.35 "Segoe UI", system-ui, sans-serif; }
+  body { padding: 18px 20px 28px; max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 18px; margin-bottom: 14px; }
+  section { background: #181b23; border-radius: 14px; padding: 14px 14px 12px; margin-bottom: 14px; }
+  h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #8e96a6; margin-bottom: 10px; font-weight: 600; }
+  h3 { font-size: 12px; color: #8e96a6; margin: 12px 0 6px; font-weight: 600; }
+  .note { font-size: 12px; color: #8e96a6; margin-top: 8px; }
+  .err { font-size: 12px; color: #ff8a8a; margin-top: 8px; }
+
+  .opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; cursor: pointer;
+    background: #20242e; color: inherit; font: inherit; border-radius: 10px; padding: 9px 12px; margin-bottom: 6px; }
+  .opt:hover { background: #272c38; }
+  .opt.on { background: #2c3a78; box-shadow: inset 0 0 0 1.5px #4f6bff; }
+  .opt .dot { width: 8px; height: 8px; border-radius: 50%; background: #4a5060; flex: none; }
+  .opt .dot.live { background: #3ddc84; }
+  .opt .txt { flex: 1; min-width: 0; }
+  .opt .name { font-weight: 600; }
+  .opt .det { font-size: 12px; color: #9aa2b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .opt.na { opacity: .55; }
+  .opt .tag { font-size: 11px; color: #9aa2b2; flex: none; }
+
+  .row { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+  .row > span { width: 110px; color: #aab0bb; flex: none; }
+  .row .val { width: 44px; text-align: right; color: #aab0bb; flex: none; }
+  input[type=range] { flex: 1; min-width: 0; accent-color: #4f6bff; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip, .btn { border: 0; cursor: pointer; font: inherit; color: #fff; background: #2a2f3b; border-radius: 999px; padding: 7px 14px; }
+  .chip:hover, .btn:hover { background: #343a49; }
+  .chip.on { background: #4f6bff; }
+  .btn.danger { background: rgba(255,77,109,.3); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .corners { display: flex; gap: 6px; }
+  .corners button { width: 44px; padding: 7px 0; text-align: center; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .empty { font-size: 13px; color: #8e96a6; padding: 6px 2px; }
+</style>
+</head>
+<body>
+<h1>NowPlaying — настройки</h1>
+
+<section>
+  <h2>Источник музыки</h2>
+  <div id="srcList"></div>
+  <div id="pcErr" class="err" style="display:none"></div>
+
+  <h3>Приложения на этом компьютере</h3>
+  <div id="pcList"></div>
+  <div class="note">Здесь появляются плееры и браузеры с медиа-управлением Windows (Spotify, Яндекс Музыка, YouTube в браузере и т. д.) — с кнопками, обложкой и перемоткой.</div>
+
+  <h3>Окно</h3>
+  <div id="winList"></div>
+  <div class="note">Для окна показывается только его название — кнопки управления недоступны.</div>
+</section>
+
+<section>
+  <h2>Вывод звука на ПК</h2>
+  <div id="audioList"><div class="empty">Загрузка…</div></div>
+  <div id="audioErr" class="err" style="display:none"></div>
+  <div class="actions">
+    <button class="btn" id="audioRefresh">Обновить список</button>
+    <button class="btn" id="openSound">Параметры звука Windows</button>
+    <button class="btn" id="openMixer">Громкость приложений</button>
+  </div>
+  <div class="note">Звук телефона через AudioRelay играет на устройство Windows «по умолчанию» — выберите здесь наушники. Вывод отдельного приложения назначается в «Громкости приложений».</div>
+</section>
+
+<section>
+  <h2>Вид карточки</h2>
+  <div class="row"><span>Положение</span>
+    <div class="corners" id="corners">
+      <button class="chip" data-c="tl" title="Слева сверху">↖</button><button class="chip" data-c="tr" title="Справа сверху">↗</button>
+      <button class="chip" data-c="bl" title="Слева снизу">↙</button><button class="chip" data-c="br" title="Справа снизу">↘</button>
+    </div>
+  </div>
+  <div class="row"><span>Размер</span><input type="range" id="scale" min="70" max="160" step="5"><b class="val" id="scaleV"></b></div>
+  <div class="row"><span>Прозрачность</span><input type="range" id="opacity" min="40" max="100" step="2"><b class="val" id="opacityV"></b></div>
+  <div class="chips" style="margin-top:8px">
+    <button class="chip" id="spin">Вращение пластинки</button>
+    <button class="chip" id="hide">Прятать, когда тихо</button>
+    <button class="chip" id="auto">Автозапуск</button>
+  </div>
+</section>
+
+<div class="actions"><button class="btn danger" id="quit">Выйти из NowPlaying</button></div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NP': '1' }, body: JSON.stringify(body || {}) }).then((r) => r.json().catch(() => ({}))).catch(() => ({}));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let cfg = null, src = null;
+
+function opt(id, name, det, o) {
+  const on = src && src.selected === id;
+  return `<button class="opt${on ? ' on' : ''}${o.na ? ' na' : ''}" data-src="${esc(id)}">
+    <span class="dot${o.live ? ' live' : ''}"></span>
+    <span class="txt"><span class="name">${esc(name)}</span><div class="det">${esc(det)}</div></span>
+    ${on ? '<span class="tag">выбрано</span>' : ''}</button>`;
+}
+
+function renderSources() {
+  if (!src) return;
+  const phone = src.list.find((s) => s.id === 'phone');
+  $('#srcList').innerHTML =
+    opt('auto', 'Автоматически', 'показывать то, что играет сейчас (телефон или ПК)', { live: !!src.current }) +
+    opt('phone', 'Телефон', phone.detail + (src.ips.length ? ` · IP ${src.ips.join(', ')}` : ''), { live: phone.playing, na: !phone.available });
+
+  const pcs = src.list.filter((s) => s.kind === 'pc');
+  $('#pcList').innerHTML = pcs.length
+    ? pcs.map((s) => opt(s.id, s.name, s.detail, { live: s.playing })).join('')
+    : `<div class="empty">${src.pc.available === false ? 'Недоступно' : 'Сейчас нет плееров. Запустите музыку в приложении или браузере.'}</div>`;
+
+  $('#winList').innerHTML = src.windows.length
+    ? src.windows.map((w) => opt(w.id, w.name, w.title, { live: false })).join('')
+    : '<div class="empty">Открытых окон не найдено</div>';
+
+  // выбранный источник пропал (например, окно закрыли) — показываем его в списке, чтобы можно было переключить
+  const known = ['auto', 'phone', ...pcs.map((s) => s.id), ...src.windows.map((w) => w.id)];
+  if (!known.includes(src.selected)) {
+    $('#srcList').innerHTML += opt(src.selected, 'Источник недоступен', src.selected, { na: true });
+  }
+
+  const e = $('#pcErr');
+  e.style.display = src.pc.available === false ? '' : 'none';
+  e.textContent = src.pc.available === false ? 'Приложения и окна ПК недоступны: ' + (src.pc.error || 'нет данных') : '';
+}
+
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-src]');
+  if (b) post('/config', { source: b.dataset.src });
+});
+
+function renderConfig() {
+  if (!cfg) return;
+  document.querySelectorAll('#corners button').forEach((b) => b.classList.toggle('on', b.dataset.c === cfg.corner));
+  $('#scale').value = cfg.scale; $('#scaleV').textContent = cfg.scale + '%';
+  $('#opacity').value = cfg.opacity; $('#opacityV').textContent = cfg.opacity + '%';
+  $('#spin').classList.toggle('on', cfg.spin);
+  $('#hide').classList.toggle('on', cfg.hideWhenIdle);
+  $('#auto').classList.toggle('on', cfg.autostart);
+}
+
+const es = new EventSource('/events');
+es.addEventListener('config', (e) => { cfg = JSON.parse(e.data); renderConfig(); renderSources(); });
+es.addEventListener('sources', (e) => { src = JSON.parse(e.data); renderSources(); });
+
+document.querySelectorAll('#corners button').forEach((b) => { b.onclick = () => post('/config', { corner: b.dataset.c, pos: null }); });
+$('#scale').oninput = (e) => { $('#scaleV').textContent = e.target.value + '%'; };
+$('#scale').onchange = (e) => post('/config', { scale: Number(e.target.value) });
+$('#opacity').oninput = (e) => { $('#opacityV').textContent = e.target.value + '%'; };
+$('#opacity').onchange = (e) => post('/config', { opacity: Number(e.target.value) });
+$('#spin').onclick = () => post('/config', { spin: !cfg.spin });
+$('#hide').onclick = () => post('/config', { hideWhenIdle: !cfg.hideWhenIdle });
+$('#auto').onclick = () => post('/config', { autostart: !cfg.autostart });
+$('#quit').onclick = () => post('/quit');
+
+// ---- вывод звука ----
+async function loadAudio() {
+  const list = $('#audioList');
+  const err = $('#audioErr');
+  err.style.display = 'none';
+  list.innerHTML = '<div class="empty">Загрузка…</div>';
+  let r;
+  try { r = await (await fetch('/audio')).json(); } catch (_) { r = { error: 'нет ответа от программы' }; }
+  if (r.error || !r.devices) {
+    list.innerHTML = '';
+    err.style.display = '';
+    err.textContent = 'Не удалось получить список устройств: ' + (r.error || 'неизвестная ошибка') + '. Можно открыть параметры звука Windows кнопкой ниже.';
+    return;
+  }
+  list.innerHTML = r.devices.length
+    ? r.devices.map((d) => `<button class="opt${d.isDefault ? ' on' : ''}" data-dev="${esc(d.id)}">
+        <span class="dot${d.isDefault ? ' live' : ''}"></span><span class="txt"><span class="name">${esc(d.name)}</span></span>
+        ${d.isDefault ? '<span class="tag">по умолчанию</span>' : ''}</button>`).join('')
+    : '<div class="empty">Устройства вывода не найдены</div>';
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-dev]');
+  if (!b) return;
+  const r = await post('/audio/set', { id: b.dataset.dev });
+  if (r.error) {
+    const err = $('#audioErr');
+    err.style.display = '';
+    err.textContent = 'Не удалось переключить: ' + r.error + '. Выберите устройство в параметрах звука Windows.';
+  } else {
+    loadAudio();
+  }
+});
+$('#audioRefresh').onclick = loadAudio;
+$('#openSound').onclick = () => post('/open', { target: 'sound' });
+$('#openMixer').onclick = () => post('/open', { target: 'mixer' });
+loadAudio();
+</script>
+</body>
+</html>

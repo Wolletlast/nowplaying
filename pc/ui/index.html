@@ -16,20 +16,24 @@
   .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.4)); }
   .content { position: absolute; inset: 0; display: flex; align-items: center; gap: 14px; padding: 0 18px 0 17px; }
 
-  /* ---- виниловая пластинка ---- */
-  .vinyl { position: relative; flex: none; width: 116px; height: 116px; border-radius: 50%;
-    background: repeating-radial-gradient(circle at center, #0b0b0d 0 2px, #1a1a1f 2px 3px);
-    box-shadow: 0 8px 18px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.07);
+  /* ---- виниловая пластинка: обложка на весь диск ---- */
+  .vinyl { position: relative; flex: none; width: 124px; height: 124px; border-radius: 50%;
+    box-shadow: 0 10px 22px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.12); }
+  .disc { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: #0b0b0d;
     animation: spin 5.5s linear infinite; animation-play-state: paused; }
-  .vinyl.on { animation-play-state: running; }
-  .vinyl::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,.17) 28deg, rgba(255,255,255,0) 66deg,
-      rgba(255,255,255,0) 180deg, rgba(255,255,255,.17) 208deg, rgba(255,255,255,0) 246deg, rgba(255,255,255,0) 360deg); }
-  .label { position: absolute; inset: 25%; border-radius: 50%; z-index: 1;
-    background: linear-gradient(135deg, #6c4bd6, #b04bd6) center / cover;
-    box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
-  .hole { position: absolute; inset: 47.5%; border-radius: 50%; z-index: 2; background: #101114;
-    box-shadow: 0 0 0 1px rgba(255,255,255,.2); }
+  .vinyl.on .disc { animation-play-state: running; }
+  .cover { position: absolute; inset: 0; background: radial-gradient(circle at 40% 35%, #6c4bd6, #2a1d55) center / cover; }
+  .grooves { position: absolute; inset: 0; border-radius: 50%;
+    background: repeating-radial-gradient(circle at center, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.2) 2px 3px); }
+  .vinyl.noart .disc { background: repeating-radial-gradient(circle at center, #0b0b0d 0 2px, #1a1a1f 2px 3px); }
+  .vinyl.noart .cover { inset: 28%; border-radius: 50%; }
+  .vinyl.noart .grooves { display: none; }
+  .sheen { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: conic-gradient(from 20deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,.22) 30deg, rgba(255,255,255,0) 70deg,
+      rgba(255,255,255,0) 180deg, rgba(255,255,255,.22) 210deg, rgba(255,255,255,0) 250deg); }
+  .spindle { position: absolute; inset: 42%; border-radius: 50%; background: #15161a;
+    box-shadow: 0 0 0 3px rgba(15,15,18,.85), 0 0 0 4px rgba(255,255,255,.2); }
+  .spindle::after { content: ""; position: absolute; inset: 34%; border-radius: 50%; background: #d9d9de; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ---- правая часть ---- */
@@ -41,10 +45,11 @@
   .gear:hover { background: rgba(255,255,255,.14); color: #fff; }
   .gear svg { width: 15px; height: 15px; fill: currentColor; }
 
-  .line { display: flex; justify-content: center; align-items: baseline; font-size: 14px; font-weight: 600; white-space: nowrap; min-width: 0; }
-  .line .t, .line .a { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
-  .line .a { font-weight: 500; flex-shrink: 0; max-width: 42%; }
-  .line .dot { flex: none; padding: 0 6px; opacity: .8; }
+  .line { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; white-space: nowrap; }
+  .line .t, .line .a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .line .t { font-size: 15px; font-weight: 700; }
+  .line .a { font-size: 12px; font-weight: 500; color: rgba(255,255,255,.78); }
+  .line .dot { display: none; }
 
   .seek { -webkit-app-region: no-drag; height: 14px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
   .track { position: relative; width: 100%; height: 4px; border-radius: 2px; background: rgba(255,255,255,.28); }
@@ -70,24 +75,8 @@
   .idle .vinyl { opacity: .75; }
   .idle .btns, .idle .seek, .idle .times { opacity: .35; pointer-events: none; }
 
-  /* ---- настройки ---- */
-  .panel { position: absolute; inset: 0; z-index: 5; display: none; flex-direction: column; gap: 5px; padding: 9px 18px;
-    background: #0c0d11; -webkit-app-region: no-drag; }
-  .panel.open { display: flex; }
-  .row { display: flex; align-items: center; gap: 8px; height: 20px; font-size: 11px; }
-  .row > span { width: 82px; color: #aab0bb; flex: none; }
-  .row .val { width: 34px; text-align: right; color: #aab0bb; flex: none; }
-  .corners { display: flex; gap: 5px; }
-  .corners button, .chip, .pbtn { height: 20px; border: 0; border-radius: 10px; background: rgba(255,255,255,.12); color: #fff;
-    cursor: pointer; font: inherit; font-size: 11px; }
-  .corners button { width: 34px; }
-  .corners button.on, .chip.on { background: #4f6bff; }
-  .chips { display: flex; gap: 5px; }
-  .chip { padding: 0 9px; }
-  .pbtn { padding: 0 14px; }
-  .pbtn.danger { background: rgba(255,77,109,.28); }
-  .spacer { flex: 1; }
-  input[type=range] { flex: 1; min-width: 0; height: 4px; accent-color: #4f6bff; }
+  .gear { opacity: 0; transition: opacity .15s; }
+  .card:hover .gear, .gear:focus { opacity: 1; }
 </style>
 </head>
 <body>
@@ -96,7 +85,7 @@
   <div class="shade"></div>
 
   <div class="content">
-    <div class="vinyl" id="vinyl"><div class="label" id="label"></div><div class="hole"></div></div>
+    <div class="vinyl" id="vinyl"><div class="disc"><div class="cover" id="label"></div><div class="grooves"></div></div><div class="sheen"></div><div class="spindle"></div></div>
 
     <div class="main">
       <div class="top">
@@ -119,24 +108,6 @@
       </div>
     </div>
   </div>
-
-  <div class="panel" id="panel">
-    <div class="row"><span>Положение</span>
-      <div class="corners" id="corners">
-        <button data-c="tl" title="Слева сверху">↖</button><button data-c="tr" title="Справа сверху">↗</button>
-        <button data-c="bl" title="Слева снизу">↙</button><button data-c="br" title="Справа снизу">↘</button>
-      </div>
-      <div class="spacer"></div>
-    </div>
-    <div class="row"><span>Размер</span><input type="range" id="scale" min="70" max="160" step="5"><b class="val" id="scaleV"></b></div>
-    <div class="row"><span>Прозрачность</span><input type="range" id="opacity" min="40" max="100" step="2"><b class="val" id="opacityV"></b></div>
-    <div class="row chips">
-      <button class="chip" id="spin">Вращение</button>
-      <button class="chip" id="hide">Автоскрытие</button>
-      <button class="chip" id="auto">Автозапуск</button>
-    </div>
-    <div class="row"><button class="pbtn" id="done">Готово</button><div class="spacer"></div><button class="pbtn danger" id="quit">Выход</button></div>
-  </div>
 </div>
 
 <script>
@@ -152,11 +123,11 @@ const ICONS = {
 };
 const setIcon = (el, name) => { el.innerHTML = `<svg viewBox="0 0 24 24"><path d="${ICONS[name]}"/></svg>`; };
 
-let st = null, cfg = null, info = { connected: false, ips: [] };
+let st = null, cfg = null;
 let base = { pos: 0, t: 0 };
 let dragging = false, dragPos = 0, artV = -1;
 
-const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NP': '1' }, body: JSON.stringify(body || {}) }).catch(() => {});
+const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NP': '1' }, body: JSON.stringify(body || {}) }).then((r) => r.json()).catch(() => null);
 const cmd = (name, extra) => post('/cmd', { cmd: name, ...extra });
 
 const fmt = (ms) => {
@@ -182,13 +153,14 @@ function renderTrack() {
     $('#t').textContent = st.title;
     $('#a').textContent = st.artist;
     $('#dot').style.display = st.artist ? '' : 'none';
-    $('#app').textContent = st.app || '';
+    $('#app').textContent = st.label || st.app || '';
   } else {
-    $('#t').textContent = info.connected ? 'Ничего не играет' : 'Ожидание телефона';
+    $('#t').textContent = (st && st.idleTitle) || 'Ничего не играет';
     $('#a').textContent = '';
     $('#dot').style.display = 'none';
-    $('#app').textContent = info.connected ? 'Телефон подключён' : 'IP для телефона: ' + (info.ips.join(', ') || '—');
+    $('#app').textContent = (st && st.idleSub) || '';
   }
+  const ctl = !(has && st.controls === false);
 
   const v = has ? st.artVer : 0;
   if (v !== artV) {
@@ -196,13 +168,15 @@ function renderTrack() {
     const img = v ? `url(/art?v=${v})` : '';
     $('#bg').style.backgroundImage = img;
     $('#label').style.backgroundImage = img;
+    $('#vinyl').classList.toggle('noart', !v);
   }
 
   setIcon($('#play'), has && st.playing ? 'pause' : 'play');
   setIcon($('#like'), has && st.liked ? 'heartFill' : 'heart');
   $('#like').classList.toggle('liked', has && st.liked);
   $('#like').disabled = !(has && st.canLike);
-  $('#seek').classList.toggle('off', !(has && st.canSeek && st.duration));
+  ['prev', 'play', 'next'].forEach((id) => { $('#' + id).disabled = !ctl; });
+  $('#seek').classList.toggle('off', !(has && ctl && st.canSeek && st.duration));
   $('#vinyl').classList.toggle('on', !!(has && st.playing && cfg && cfg.spin));
   $('#dur').textContent = has ? fmt(st.duration || NaN) : '--:--';
   tick();
@@ -221,12 +195,6 @@ setInterval(tick, 200);
 function renderConfig() {
   $('#card').style.opacity = cfg.opacity / 100;
   $('#vinyl').classList.toggle('on', !!(st && st.title && st.playing && cfg.spin));
-  document.querySelectorAll('#corners button').forEach((b) => b.classList.toggle('on', b.dataset.c === cfg.corner));
-  $('#scale').value = cfg.scale; $('#scaleV').textContent = cfg.scale + '%';
-  $('#opacity').value = cfg.opacity; $('#opacityV').textContent = cfg.opacity + '%';
-  $('#spin').classList.toggle('on', cfg.spin);
-  $('#hide').classList.toggle('on', cfg.hideWhenIdle);
-  $('#auto').classList.toggle('on', cfg.autostart);
 }
 
 // ---- события сервера ----
@@ -237,7 +205,6 @@ es.addEventListener('state', (e) => {
   renderTrack();
 });
 es.addEventListener('config', (e) => { cfg = JSON.parse(e.data); renderConfig(); });
-es.addEventListener('info', (e) => { info = JSON.parse(e.data); renderTrack(); });
 
 // ---- кнопки ----
 setIcon($('#prev'), 'prev'); setIcon($('#next'), 'next'); setIcon($('#play'), 'play'); setIcon($('#like'), 'heart');
@@ -273,20 +240,13 @@ seek.addEventListener('pointerup', (e) => {
   tick();
 });
 
-// ---- настройки ----
-const panel = $('#panel');
-window.openSettings = () => panel.classList.add('open');
-$('#gear').onclick = window.openSettings;
-$('#done').onclick = () => panel.classList.remove('open');
-$('#quit').onclick = () => post('/quit');
-document.querySelectorAll('#corners button').forEach((b) => { b.onclick = () => post('/config', { corner: b.dataset.c, pos: null }); });
-$('#scale').onchange = (e) => post('/config', { scale: Number(e.target.value) });
-$('#scale').oninput = (e) => { $('#scaleV').textContent = e.target.value + '%'; };
-$('#opacity').oninput = (e) => { $('#opacityV').textContent = e.target.value + '%'; $('#card').style.opacity = e.target.value / 100; };
-$('#opacity').onchange = (e) => post('/config', { opacity: Number(e.target.value) });
-$('#spin').onclick = () => post('/config', { spin: !cfg.spin });
-$('#hide').onclick = () => post('/config', { hideWhenIdle: !cfg.hideWhenIdle });
-$('#auto').onclick = () => post('/config', { autostart: !cfg.autostart });
+// ---- настройки открываются в отдельном окне ----
+const openSettings = async () => {
+  const r = await post('/open-settings');
+  if (!r || !r.handled) window.open('/settings', 'np-settings', 'width=560,height=720');
+};
+window.openSettings = openSettings;
+$('#gear').onclick = openSettings;
 </script>
 </body>
 </html>

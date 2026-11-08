@@ -16,11 +16,24 @@
   "build": {
     "appId": "com.example.nowplaying",
     "productName": "NowPlaying",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "server.js", "ui/**/*", "tray.png", "package.json"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "ui/**/*",
+      "tray.png",
+      "package.json",
+      "winps.js",
+      "pcmedia.js",
+      "ps/**/*"
+    ],
     "win": {
       "icon": "icon.png",
-      "target": ["portable"],
+      "target": [
+        "portable"
+      ],
       "artifactName": "NowPlaying.${ext}"
     }
   }

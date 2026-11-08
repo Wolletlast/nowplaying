@@ -1,8 +1,9 @@
 'use strict';
 // Окно-оверлей NowPlaying (Electron). Вся логика приёма данных - в server.js, интерфейс - в ui/index.html.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, dialog, shell } = require('electron');
 const path = require('path');
 const server = require('./server');
+const pcmedia = require('./pcmedia');
 
 const BASE_W = 420;
 const BASE_H = 150;
@@ -10,6 +11,7 @@ const MARGIN = 16;
 
 let win = null;
 let tray = null;
+let settingsWin = null;
 let applying = false;
 let pinned = false;                       // показывать карточку независимо от того, играет ли музыка
 let lastActive = 0;
@@ -39,6 +41,9 @@ async function init() {
   server.bus.on('config', onConfig);
   server.bus.on('state', onState);
   server.bus.on('quit', () => app.quit());
+  server.bus.on('open-settings', openSettings);
+  server.bus.on('open-external', (url) => { if (/^ms-settings:[a-z-]+$/.test(url)) shell.openExternal(url).catch(() => {}); });
+  pcmedia.attach(server, app.getPath('userData'));
   setInterval(updateVisibility, 1500);
   applyAutostart();
 }
@@ -65,7 +70,7 @@ function createTray() {
   const rebuild = () => tray.setContextMenu(Menu.buildFromTemplate([
     { label: pinned ? 'Скрывать, когда ничего не играет' : 'Всегда показывать карточку',
       click: () => { pinned = !pinned; updateVisibility(); rebuild(); } },
-    { label: 'Настройки…', click: () => { pinned = true; updateVisibility(); openSettings(); rebuild(); } },
+    { label: 'Настройки…', click: () => { openSettings(); } },
     { type: 'separator' },
     { label: 'Выход', click: () => app.quit() },
   ]));
@@ -74,7 +79,20 @@ function createTray() {
 }
 
 function openSettings() {
-  if (win) win.webContents.executeJavaScript('window.openSettings && window.openSettings()').catch(() => {});
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    if (settingsWin.isMinimized()) settingsWin.restore();
+    settingsWin.show();
+    settingsWin.focus();
+    return;
+  }
+  settingsWin = new BrowserWindow({
+    width: 560, height: 740, minWidth: 420, minHeight: 480,
+    title: 'NowPlaying — настройки', backgroundColor: '#101218', autoHideMenuBar: true,
+    webPreferences: { backgroundThrottling: true },
+  });
+  settingsWin.setMenuBarVisibility(false);
+  settingsWin.loadURL(`http://127.0.0.1:${server.PORT}/settings`);
+  settingsWin.on('closed', () => { settingsWin = null; });
 }
 
 // ---------- расположение ----------
