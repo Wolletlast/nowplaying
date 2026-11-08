@@ -63,6 +63,7 @@
 <section>
   <h2>Звук телефона на ПК</h2>
   <div class="chips"><button class="chip" id="stream">Передавать звук телефона на ПК</button></div>
+  <div class="row" style="margin-top:10px"><span>Громкость</span><input type="range" id="volume" min="0" max="100" step="1"><b class="val" id="volumeV"></b></div>
   <div id="streamState" class="note"></div>
   <div class="note">Когда источник — телефон (или «Автоматически» и играет телефон), звук идёт с телефона в устройство вывода ПК. Для этого в приложении на телефоне нужно один раз нажать «Разрешить» в разделе «Звук на ПК».</div>
 </section>
@@ -154,6 +155,8 @@ function renderConfig() {
   $('#hide').classList.toggle('on', cfg.hideWhenIdle);
   $('#auto').classList.toggle('on', cfg.autostart);
   $('#stream').classList.toggle('on', cfg.streamAudio);
+  if (document.activeElement !== $('#volume')) $('#volume').value = cfg.volume;
+  $('#volumeV').textContent = cfg.volume + '%';
   renderAudioState();
 }
 
@@ -180,6 +183,8 @@ $('#opacity').onchange = (e) => post('/config', { opacity: Number(e.target.value
 $('#spin').onclick = () => post('/config', { spin: !cfg.spin });
 $('#hide').onclick = () => post('/config', { hideWhenIdle: !cfg.hideWhenIdle });
 $('#auto').onclick = () => post('/config', { autostart: !cfg.autostart });
+let vt = 0;
+$('#volume').oninput = (e) => { $('#volumeV').textContent = e.target.value + '%'; clearTimeout(vt); vt = setTimeout(() => post('/config', { volume: Number(e.target.value) }), 40); };
 $('#stream').onclick = () => post('/config', { streamAudio: !cfg.streamAudio });
 $('#quit').onclick = () => post('/quit');
 

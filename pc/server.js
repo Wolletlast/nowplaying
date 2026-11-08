@@ -27,6 +27,7 @@ const DEFAULT_CONFIG = {
   autostart: false,    // запускать вместе с Windows
   source: 'auto',      // auto | phone | pc:<id приложения> | win:<pid окна>
   streamAudio: true,   // принимать звук телефона и играть его на ПК, когда источник - телефон
+  volume: 70,          // громкость звука телефона на ПК, %
 };
 const SOURCE_RE = /^(auto|phone|pc:.{1,300}|win:\d{1,10})$/;
 let config = { ...DEFAULT_CONFIG };
@@ -95,6 +96,7 @@ function sanitize(p) {
   }
   if (Number.isFinite(p.scale)) out.scale = clamp(Math.round(p.scale), 60, 200);
   if (Number.isFinite(p.opacity)) out.opacity = clamp(Math.round(p.opacity), 30, 100);
+  if (Number.isFinite(p.volume)) out.volume = clamp(Math.round(p.volume), 0, 100);
   for (const k of ['spin', 'hideWhenIdle', 'autostart', 'streamAudio']) {
     if (typeof p[k] === 'boolean') out[k] = p[k];
   }
