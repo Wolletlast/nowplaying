@@ -121,6 +121,10 @@ class MediaListenerService : NotificationListenerService() {
     }
 
     private fun handleCommand(cmd: JSONObject) {
+        if (cmd.optString("cmd") == "audio") {
+            AudioStreamService.setWanted(cmd.optLong("pos") == 1L)
+            return
+        }
         val c = MediaUtil.pick(controllers) ?: return
         MediaUtil.execute(c, cmd.optString("cmd"), cmd.optLong("pos"))
     }
@@ -188,6 +192,8 @@ class MediaListenerService : NotificationListenerService() {
         val sentArt = if (json.has("art")) cachedArt else null
         Sender.post(this, json) { resp ->
             if (resp != null) {
+                // ПК сообщает, нужен ли ему звук телефона (источник «телефон»)
+                if (resp.has("audio")) AudioStreamService.setWanted(resp.optBoolean("audio"))
                 if (sentArt != null) artSent = sentArt
                 // ПК перезапустился и обложки у него нет, отправляем заново
                 if (resp.optBoolean("needArt")) {
@@ -206,14 +212,16 @@ class MediaListenerService : NotificationListenerService() {
         pkg
     }
 
-    /** Обложка 144x144 в PNG (base64). Кэшируется, пока плеер отдаёт тот же Bitmap. */
+    /** Обложка 256x256: обрезается до квадрата по центру и кодируется в JPEG (base64). Кэшируется, пока плеер отдаёт тот же Bitmap. */
     private fun artFor(bmp: Bitmap?): String? {
         if (bmp == null || bmp.isRecycled) return null
         if (bmp === lastBitmap && cachedArt != null) return cachedArt
         return try {
-            val scaled = Bitmap.createScaledBitmap(bmp, 144, 144, true)
+            val side = minOf(bmp.width, bmp.height)
+            val square = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
+            val scaled = Bitmap.createScaledBitmap(square, 256, 256, true)
             val out = ByteArrayOutputStream()
-            scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
+            scaled.compress(Bitmap.CompressFormat.JPEG, 90, out)
             lastBitmap = bmp
             cachedArt = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
             cachedArt

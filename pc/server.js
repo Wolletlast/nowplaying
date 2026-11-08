@@ -26,6 +26,7 @@ const DEFAULT_CONFIG = {
   hideWhenIdle: true,  // скрывать карточку, когда ничего не играет
   autostart: false,    // запускать вместе с Windows
   source: 'auto',      // auto | phone | pc:<id приложения> | win:<pid окна>
+  streamAudio: true,   // принимать звук телефона и играть его на ПК, когда источник - телефон
 };
 const SOURCE_RE = /^(auto|phone|pc:.{1,300}|win:\d{1,10})$/;
 let config = { ...DEFAULT_CONFIG };
@@ -56,6 +57,18 @@ let pending = null;    // открытый long-poll запрос телефон
 let lastSeen = 0;
 let connected = false;
 
+// ---------- звук телефона ----------
+const audioOut = new Set();   // страницы-плееры (ui/player.html), которым пересылаем звук
+let audioIn = null;           // текущий запрос от телефона
+let audioLast = 0;
+let lastWant = false;
+const wantAudio = () => config.streamAudio && connected
+  && (config.source === 'phone' || (config.source === 'auto' && displayedId === 'phone'));
+const audioStatus = () => ({
+  enabled: config.streamAudio, want: wantAudio(),
+  active: Date.now() - audioLast < 2500, listening: audioOut.size > 0,
+});
+
 const COMMANDS = new Set(['play', 'pause', 'toggle', 'next', 'prev', 'seek', 'like']);
 const OPEN_TARGETS = { sound: 'ms-settings:sound', mixer: 'ms-settings:apps-volume' };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -82,7 +95,7 @@ function sanitize(p) {
   }
   if (Number.isFinite(p.scale)) out.scale = clamp(Math.round(p.scale), 60, 200);
   if (Number.isFinite(p.opacity)) out.opacity = clamp(Math.round(p.opacity), 30, 100);
-  for (const k of ['spin', 'hideWhenIdle', 'autostart']) {
+  for (const k of ['spin', 'hideWhenIdle', 'autostart', 'streamAudio']) {
     if (typeof p[k] === 'boolean') out[k] = p[k];
   }
   if (typeof p.source === 'string' && SOURCE_RE.test(p.source)) out.source = p.source;
@@ -99,10 +112,8 @@ function updateConfig(patch, from = 'ui') {
   }
   sse('config', config);
   bus.emit('config', config, keys, from);
-  if (keys.includes('source')) {
-    syncWindowSource();
-    refresh();
-  }
+  if (keys.includes('source')) syncWindowSource();
+  if (keys.includes('source') || keys.includes('streamAudio')) refresh();
   return config;
 }
 
@@ -246,6 +257,12 @@ function refresh() {
     displayedArt = cur ? cur.art : null;
     artVersion += 1;
   }
+  const want = wantAudio();
+  if (want !== lastWant) {
+    lastWant = want;
+    if (connected) pushCommand({ cmd: 'audio', pos: want ? 1 : 0 });
+    sse('audio', audioStatus());
+  }
   const st = publicState();
   sse('state', st);
   sse('sources', sourcesPayload());
@@ -351,7 +368,23 @@ function setPcSessions(list) {
     if (s.kind === 'pc' && !seen.has(id)) sources.delete(id);
   }
   pcStatus = { available: true, error: '' };
+  syncWindowSource();
   refresh();
+}
+
+const winArt = new Map();   // pid -> иконка программы (PNG), приходит один раз
+
+const normId = (id) => String(id).split('!').pop().replace(/\.exe$/i, '').split('.').pop().replace(/_.*$/, '').toLowerCase();
+
+/** Есть ли у программы окна своя медиасессия Windows (браузер, Spotify...): тогда берём из неё трек и управляем ей. */
+function matchSession(w) {
+  const n = String(w.name).toLowerCase();
+  for (const s of sources.values()) {
+    if (s.kind !== 'pc') continue;
+    const k = normId(s.rawId);
+    if (k === n || (k.length >= 4 && n.length >= 4 && (k.includes(n) || n.includes(k)))) return s;
+  }
+  return null;
 }
 
 function syncWindowSource() {
@@ -362,17 +395,36 @@ function syncWindowSource() {
   if (!sel.startsWith('win:')) return;
   const w = windows.find((x) => x.id === sel);
   if (!w) { sources.delete(sel); return; }
-  putSource(sel, 'win', w.name, w.pid, {
-    ...emptyState(), title: w.title, artist: w.name, app: 'Окно', playing: true,
-    controls: false, recvAt: Date.now(),
-  }, null);
+  const m = matchSession(w);
+  const prev = sources.get(sel);
+  let st;
+  let art;
+  if (m) {
+    st = { ...m.state, app: w.name, controls: true };
+    art = m.art;
+  } else {
+    st = {
+      ...emptyState(), title: w.title, artist: w.name, app: 'Окно', controls: true, recvAt: Date.now(),
+      playing: prev && !prev.via ? prev.state.playing : true,   // состояние окна неизвестно: считаем, что играет
+    };
+    art = winArt.get(w.pid) || null;
+  }
+  const s = putSource(sel, 'win', w.name, w.pid, st, art);
+  s.via = m ? m.rawId : null;
+  s.hwnd = w.hwnd;
 }
 
 function setWindows(list) {
-  windows = (Array.isArray(list) ? list : [])
-    .filter((w) => w && Number.isFinite(Number(w.pid)) && w.title)
-    .map((w) => ({ id: `win:${Number(w.pid)}`, pid: Number(w.pid), name: str(w.name, 60), title: str(w.title, 200) }))
-    .filter((w) => !/^(NowPlaying|electron)$/i.test(w.name));
+  windows = [];
+  for (const w of Array.isArray(list) ? list : []) {
+    if (!w || !Number.isFinite(Number(w.pid)) || !w.title) continue;
+    const pid = Number(w.pid);
+    if (typeof w.art === 'string' && w.art) winArt.set(pid, Buffer.from(w.art, 'base64'));
+    windows.push({ id: `win:${pid}`, pid, name: str(w.name, 60), title: str(w.title, 200), hwnd: Number(w.hwnd) || 0 });
+  }
+  windows = windows.filter((w) => !/^(NowPlaying|electron)$/i.test(w.name));
+  const pids = new Set(windows.map((w) => w.pid));
+  for (const pid of winArt.keys()) if (!pids.has(pid)) winArt.delete(pid);
   syncWindowSource();
   refresh();
 }
@@ -386,9 +438,25 @@ function setPcStatus(st) {
 function routeCommand(body) {
   const cur = displayedId ? sources.get(displayedId) : null;
   if (!cur) return;
+  const cmd = body.cmd;
   const pos = Math.max(0, Math.round(num(body.pos)));
-  if (cur.kind === 'phone') pushCommand({ cmd: body.cmd, pos });
-  else if (cur.kind === 'pc' && body.cmd !== 'like') bus.emit('pc-cmd', { cmd: body.cmd, id: cur.rawId, pos });
+  if (cur.kind === 'phone') {
+    pushCommand({ cmd, pos });
+  } else if (cur.kind === 'pc') {
+    if (cmd !== 'like') bus.emit('pc-cmd', { cmd, id: cur.rawId, pos });
+  } else if (cur.kind === 'win') {
+    if (cmd === 'like') return;
+    if (cur.via) {
+      bus.emit('pc-cmd', { cmd, id: cur.via, pos });
+    } else if (cur.hwnd && cmd !== 'seek') {
+      // обычное окно: стандартные медиа-команды окну; ответа о состоянии нет, поэтому play/pause отмечаем сами
+      bus.emit('pc-cmd', { cmd, hwnd: cur.hwnd });
+      if (cmd === 'toggle') cur.state.playing = !cur.state.playing;
+      else if (cmd === 'play') cur.state.playing = true;
+      else if (cmd === 'pause') cur.state.playing = false;
+      refresh();
+    }
+  }
 }
 
 // ---------- HTTP ----------
@@ -440,15 +508,38 @@ const server = http.createServer(async (req, res) => {
       const d = JSON.parse((await readBody(req)) || '{}');
       touch();
       const r = applyNow(d);
-      return sendJson(res, 200, { ok: true, needArt: r.needArt });
+      return sendJson(res, 200, { ok: true, needArt: r.needArt, audio: wantAudio() });
     }
     if (req.method === 'GET' && p === '/poll') return handlePoll(req, res);
+    if (req.method === 'POST' && p === '/audio-in') {
+      // поток звука от телефона: сырой PCM 48000 Гц, 16 бит, стерео
+      if (!wantAudio()) { res.writeHead(409, { Connection: 'close' }); return res.end(); }
+      if (audioIn && audioIn !== req) { try { audioIn.destroy(); } catch (_) { /* уже закрыт */ } }
+      audioIn = req;
+      touch();
+      req.on('data', (c) => {
+        audioLast = Date.now();
+        for (const o of audioOut) if (o.writableLength < 262144) o.write(c);   // отстающего слушателя не копим
+      });
+      req.on('close', () => { if (audioIn === req) audioIn = null; });
+      req.on('end', () => { if (!res.writableEnded) sendJson(res, 200, { ok: true }); });
+      return undefined;
+    }
 
     // дальше только локально
     if (!isLocal(req)) return sendText(res, 403, 'forbidden');
 
     if (req.method === 'GET' && p === '/') return sendPage(res, 'index.html');
     if (req.method === 'GET' && p === '/settings') return sendPage(res, 'settings.html');
+    if (req.method === 'GET' && p === '/player') return sendPage(res, 'player.html');
+    if (req.method === 'GET' && p === '/audio-out') {
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' });
+      res.flushHeaders();
+      audioOut.add(res);
+      sse('audio', audioStatus());
+      req.on('close', () => { audioOut.delete(res); });
+      return undefined;
+    }
     if (p === '/favicon.ico') { res.writeHead(204); return res.end(); }
     if (req.method === 'GET' && p === '/art') {
       const art = displayedArt;
@@ -464,6 +555,7 @@ const server = http.createServer(async (req, res) => {
       res.write(`event: config\ndata: ${JSON.stringify(config)}\n\n`);
       res.write(`event: info\ndata: ${JSON.stringify(infoPayload())}\n\n`);
       res.write(`event: sources\ndata: ${JSON.stringify(sourcesPayload())}\n\n`);
+      res.write(`event: audio\ndata: ${JSON.stringify(audioStatus())}\n\n`);
       res.write(`event: state\ndata: ${JSON.stringify(publicState())}\n\n`);
       return undefined;
     }
@@ -531,6 +623,7 @@ function startDiscovery() {
   } catch (_) { udp = null; }
 }
 
+server.requestTimeout = 0;   // поток звука от телефона идёт одним долгим запросом
 let timers = [];
 function start() {
   return new Promise((resolve, reject) => {
@@ -541,6 +634,7 @@ function start() {
       timers = [
         setInterval(checkConnection, 3000),
         setInterval(() => sse('ping', {}), 15000),
+        setInterval(() => sse('audio', audioStatus()), 2000),
       ];
       startDiscovery();
       resolve();
@@ -550,6 +644,7 @@ function start() {
 function stop() {
   timers.forEach(clearInterval);
   for (const r of sseClients) r.end();
+  for (const r of audioOut) r.end();
   if (udp) { try { udp.close(); } catch (_) { /* уже закрыт */ } udp = null; }
   server.close();
 }

@@ -6,15 +6,27 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.SweepGradient
 import android.view.View
+import kotlin.math.max
 import kotlin.math.min
 
-/** Виниловая пластинка: канавки, блик и обложка трека в центре. Вращается снаружи через rotation. */
+/**
+ * Виниловая пластинка: обложка трека занимает весь диск, поверх канавки и блик.
+ * Вращается только диск (свойство angle), блик стоит на месте, как на настоящей пластинке.
+ */
 class VinylView(ctx: Context) : View(ctx) {
+
     var cover: Bitmap? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    var angle: Float = 0f
         set(value) {
             field = value
             invalidate()
@@ -22,12 +34,14 @@ class VinylView(ctx: Context) : View(ctx) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val clip = Path()
+    private val src = Rect()
+    private val dst = RectF()
     private var sheen: Shader? = null
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         sheen = SweepGradient(
             w / 2f, h / 2f,
-            intArrayOf(0x00FFFFFF, 0x2EFFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x2EFFFFFF, 0x00FFFFFF, 0x00FFFFFF),
+            intArrayOf(0x00FFFFFF, 0x38FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x38FFFFFF, 0x00FFFFFF, 0x00FFFFFF),
             floatArrayOf(0f, 0.08f, 0.2f, 0.5f, 0.58f, 0.7f, 1f)
         )
     }
@@ -36,46 +50,64 @@ class VinylView(ctx: Context) : View(ctx) {
         val cx = width / 2f
         val cy = height / 2f
         val r = min(width, height) / 2f
+        val hairline = max(1f, r / 140f)
+        val bmp = cover?.takeIf { !it.isRecycled }
+
+        // ---- диск (вращается) ----
+        canvas.save()
+        canvas.rotate(angle, cx, cy)
+        clip.reset()
+        clip.addCircle(cx, cy, r, Path.Direction.CW)
+        canvas.clipPath(clip)
 
         paint.style = Paint.Style.FILL
         paint.shader = null
         paint.color = 0xFF0B0B0D.toInt()
         canvas.drawCircle(cx, cy, r, paint)
 
-        // канавки
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f
-        paint.color = 0x26FFFFFF
-        var rr = r * 0.5f
-        while (rr < r - 2f) {
-            canvas.drawCircle(cx, cy, rr, paint)
-            rr += r * 0.05f
+        if (bmp != null) {
+            val side = min(bmp.width, bmp.height)
+            src.set((bmp.width - side) / 2, (bmp.height - side) / 2, (bmp.width + side) / 2, (bmp.height + side) / 2)
+            dst.set(cx - r, cy - r, cx + r, cy + r)
+            canvas.drawBitmap(bmp, src, dst, paint)
+        } else {
+            paint.color = 0xFF6C4BD6.toInt()
+            canvas.drawCircle(cx, cy, r * 0.36f, paint)
         }
 
-        // блик
+        // канавки
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = hairline
+        paint.color = if (bmp != null) 0x33000000 else 0x26FFFFFF
+        var rr = r * 0.34f
+        while (rr < r - 1f) {
+            canvas.drawCircle(cx, cy, rr, paint)
+            rr += max(3f, r * 0.03f)
+        }
+        canvas.restore()
+
+        // ---- неподвижные детали ----
         paint.style = Paint.Style.FILL
         paint.shader = sheen
         canvas.drawCircle(cx, cy, r, paint)
         paint.shader = null
 
-        // обложка в центре
-        val lr = r * 0.5f
-        val bmp = cover
-        if (bmp != null && !bmp.isRecycled) {
-            canvas.save()
-            clip.reset()
-            clip.addCircle(cx, cy, lr, Path.Direction.CW)
-            canvas.clipPath(clip)
-            canvas.drawBitmap(bmp, null, RectF(cx - lr, cy - lr, cx + lr, cy + lr), paint)
-            canvas.restore()
-        } else {
-            paint.color = 0xFF6C4BD6.toInt()
-            canvas.drawCircle(cx, cy, lr, paint)
-        }
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = hairline * 2
+        paint.color = 0x33FFFFFF
+        canvas.drawCircle(cx, cy, r - hairline, paint)
 
-        // отверстие
-        paint.color = 0xFF0B0B0D.toInt()
-        canvas.drawCircle(cx, cy, r * 0.045f, paint)
+        // шпиндель в центре
+        paint.style = Paint.Style.FILL
+        paint.color = 0xFF15161A.toInt()
+        canvas.drawCircle(cx, cy, r * 0.1f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = hairline * 2
+        paint.color = 0x40FFFFFF
+        canvas.drawCircle(cx, cy, r * 0.1f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xFFD9D9DE.toInt()
+        canvas.drawCircle(cx, cy, r * 0.04f, paint)
     }
 }
 
@@ -89,23 +121,55 @@ class IconButton(ctx: Context) : View(ctx) {
             invalidate()
         }
 
-    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2AFFFFFF }
-    private val ic = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    /** Белая кнопка с тёмной иконкой (главная кнопка play/pause). */
+    var solid: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /** Без круглой подложки (сердечко рядом с названием). */
+    var plain: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ic = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
+
+    init {
+        isClickable = true
+    }
 
     override fun setEnabled(enabled: Boolean) {
         super.setEnabled(enabled)
         alpha = if (enabled) 1f else 0.35f
     }
 
+    /** Лёгкое сжатие при нажатии, чтобы было видно, что кнопка сработала. */
+    override fun dispatchSetPressed(pressed: Boolean) {
+        val s = if (pressed) 0.92f else 1f
+        scaleX = s
+        scaleY = s
+    }
+
     override fun onDraw(canvas: Canvas) {
         val cx = width / 2f
         val cy = height / 2f
         val r = min(width, height) / 2f
-        canvas.drawCircle(cx, cy, r, bg)
-        val u = r * 0.42f
+        val iconColor = if (solid) 0xFF14161C.toInt() else Color.WHITE
+
+        if (!plain) {
+            bg.style = Paint.Style.FILL
+            bg.color = if (solid) Color.WHITE else 0x2EFFFFFF
+            canvas.drawCircle(cx, cy, r, bg)
+        }
+
+        val u = r * if (plain) 0.5f else 0.4f
         ic.style = Paint.Style.FILL
-        ic.color = Color.WHITE
+        ic.color = iconColor
         path.reset()
 
         when (kind) {
@@ -146,7 +210,7 @@ class IconButton(ctx: Context) : View(ctx) {
                     ic.color = 0xFFFF4D6D.toInt()
                 } else {
                     ic.style = Paint.Style.STROKE
-                    ic.strokeWidth = r * 0.09f
+                    ic.strokeWidth = max(2f, r * 0.08f)
                 }
                 canvas.drawPath(path, ic)
             }

@@ -57,7 +57,14 @@
 
   <h3>Окно</h3>
   <div id="winList"></div>
-  <div class="note">Для окна показывается только его название — кнопки управления недоступны.</div>
+  <div class="note">Для окна показывается его название и значок программы. Если у программы есть медиа-сессия Windows (браузер, Spotify и т. д.), берутся трек, обложка и перемотка из неё. Иначе кнопки отправляют окну стандартные медиа-команды (пауза, следующий, предыдущий): это работает у плееров вроде foobar2000 или VLC, у остальных окон кнопки ничего не сделают.</div>
+</section>
+
+<section>
+  <h2>Звук телефона на ПК</h2>
+  <div class="chips"><button class="chip" id="stream">Передавать звук телефона на ПК</button></div>
+  <div id="streamState" class="note"></div>
+  <div class="note">Когда источник — телефон (или «Автоматически» и играет телефон), звук идёт с телефона в устройство вывода ПК. Для этого в приложении на телефоне нужно один раз нажать «Разрешить» в разделе «Звук на ПК».</div>
 </section>
 
 <section>
@@ -69,7 +76,7 @@
     <button class="btn" id="openSound">Параметры звука Windows</button>
     <button class="btn" id="openMixer">Громкость приложений</button>
   </div>
-  <div class="note">Звук телефона через AudioRelay играет на устройство Windows «по умолчанию» — выберите здесь наушники. Вывод отдельного приложения назначается в «Громкости приложений».</div>
+  <div class="note">Звук телефона и большинства программ играет на устройство Windows «по умолчанию» — выберите здесь наушники. Вывод отдельного приложения назначается в «Громкости приложений».</div>
 </section>
 
 <section>
@@ -96,7 +103,7 @@
 const $ = (s) => document.querySelector(s);
 const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NP': '1' }, body: JSON.stringify(body || {}) }).then((r) => r.json().catch(() => ({}))).catch(() => ({}));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let cfg = null, src = null;
+let cfg = null, src = null, aud = null;
 
 function opt(id, name, det, o) {
   const on = src && src.selected === id;
@@ -146,9 +153,22 @@ function renderConfig() {
   $('#spin').classList.toggle('on', cfg.spin);
   $('#hide').classList.toggle('on', cfg.hideWhenIdle);
   $('#auto').classList.toggle('on', cfg.autostart);
+  $('#stream').classList.toggle('on', cfg.streamAudio);
+  renderAudioState();
 }
 
+function renderAudioState() {
+  const el = $('#streamState');
+  if (!cfg || !aud) { el.textContent = ''; return; }
+  let t;
+  if (!cfg.streamAudio) t = 'Выключено.';
+  else if (!aud.want) t = 'Сейчас не нужно: источник не телефон или телефон не подключён.';
+  else if (aud.active) t = aud.listening ? '✓ Звук идёт с телефона на ПК.' : 'Звук приходит, но плеер на ПК не запущен.';
+  else t = 'Жду звук от телефона. Откройте приложение на телефоне → Настройки → «Звук на ПК» → «Разрешить».';
+  el.textContent = t;
+}
 const es = new EventSource('/events');
+es.addEventListener('audio', (e) => { aud = JSON.parse(e.data); renderAudioState(); });
 es.addEventListener('config', (e) => { cfg = JSON.parse(e.data); renderConfig(); renderSources(); });
 es.addEventListener('sources', (e) => { src = JSON.parse(e.data); renderSources(); });
 
@@ -160,6 +180,7 @@ $('#opacity').onchange = (e) => post('/config', { opacity: Number(e.target.value
 $('#spin').onclick = () => post('/config', { spin: !cfg.spin });
 $('#hide').onclick = () => post('/config', { hideWhenIdle: !cfg.hideWhenIdle });
 $('#auto').onclick = () => post('/config', { autostart: !cfg.autostart });
+$('#stream').onclick = () => post('/config', { streamAudio: !cfg.streamAudio });
 $('#quit').onclick = () => post('/quit');
 
 // ---- вывод звука ----

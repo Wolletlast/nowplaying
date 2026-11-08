@@ -12,6 +12,7 @@ const MARGIN = 16;
 let win = null;
 let tray = null;
 let settingsWin = null;
+let audioWin = null;
 let applying = false;
 let pinned = false;                       // показывать карточку независимо от того, играет ли музыка
 let lastActive = 0;
@@ -37,6 +38,7 @@ async function init() {
     return;
   }
   createWindow();
+  createAudioWindow();
   createTray();
   server.bus.on('config', onConfig);
   server.bus.on('state', onState);
@@ -61,6 +63,16 @@ function createWindow() {
   win.loadURL(`http://127.0.0.1:${server.PORT}/`);
   win.webContents.on('did-finish-load', () => { applyLayout(); updateVisibility(); });
   win.on('moved', onMoved);
+}
+
+// Невидимое окно-«динамик»: играет звук, который телефон присылает на ПК (ui/player.html).
+function createAudioWindow() {
+  audioWin = new BrowserWindow({
+    show: false, width: 200, height: 100, skipTaskbar: true,
+    webPreferences: { backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
+  });
+  audioWin.loadURL(`http://127.0.0.1:${server.PORT}/player`);
+  audioWin.on('closed', () => { audioWin = null; });
 }
 
 function createTray() {

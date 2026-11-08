@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>NowPlaying audio</title>
+</head>
+<body>
+<script>
+'use strict';
+// Невидимый «динамик»: принимает звук телефона от сервера (PCM 48 кГц, 16 бит, стерео)
+// и воспроизводит его на устройство вывода Windows по умолчанию.
+const RATE = 48000, CH = 2, FRAME = 4;
+const stats = { bytes: 0, chunks: 0, connected: false, state: 'init' };
+window.__audio = stats;
+
+let ctx = null, nextT = 0;
+let rest = new Uint8Array(0);
+
+function makeCtx() {
+  if (ctx) { try { ctx.close(); } catch (_) {} }
+  ctx = new AudioContext({ sampleRate: RATE, latencyHint: 'interactive' });
+  nextT = 0;
+  stats.state = ctx.state;
+}
+makeCtx();
+// сменили устройство вывода по умолчанию: пересоздаём вывод, чтобы звук перешёл на новое устройство
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', () => makeCtx());
+
+function play(bytes) {
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  stats.state = ctx.state;
+  const buf = new Uint8Array(rest.length + bytes.length);
+  buf.set(rest, 0); buf.set(bytes, rest.length);
+  const usable = buf.length - (buf.length % FRAME);
+  rest = buf.slice(usable);
+  if (!usable) return;
+
+  const frames = usable / FRAME;
+  const pcm = new Int16Array(buf.buffer, 0, usable / 2);
+  const ab = ctx.createBuffer(CH, frames, RATE);
+  const l = ab.getChannelData(0), r = ab.getChannelData(1);
+  for (let i = 0; i < frames; i++) { l[i] = pcm[2 * i] / 32768; r[i] = pcm[2 * i + 1] / 32768; }
+
+  const now = ctx.currentTime;
+  if (nextT < now + 0.02) nextT = now + 0.12;        // буфер опустел: небольшой запас против щелчков
+  else if (nextT > now + 0.7) return;                // накопилась задержка: пропускаем кусок
+  const src = ctx.createBufferSource();
+  src.buffer = ab;
+  src.connect(ctx.destination);
+  src.start(nextT);
+  nextT += frames / RATE;
+}
+
+async function run() {
+  for (;;) {
+    try {
+      const resp = await fetch('/audio-out', { cache: 'no-store' });
+      const reader = resp.body.getReader();
+      stats.connected = true;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        stats.bytes += value.length; stats.chunks++;
+        play(value);
+      }
+    } catch (_) { /* сервер перезапустился или оборвалась связь */ }
+    stats.connected = false;
+    rest = new Uint8Array(0);
+    await new Promise((res) => setTimeout(res, 1000));
+  }
+}
+run();
+</script>
+</body>
+</html>
