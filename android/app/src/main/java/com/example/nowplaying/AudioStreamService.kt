@@ -226,7 +226,7 @@ class AudioStreamService : Service() {
         @Volatile
         var error = ""
 
-        fun setWanted(on: Boolean) {
+        fun requestAudio(on: Boolean) {
             wanted = on
             instance?.applyWanted()
         }

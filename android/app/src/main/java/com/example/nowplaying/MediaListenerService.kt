@@ -122,7 +122,7 @@ class MediaListenerService : NotificationListenerService() {
 
     private fun handleCommand(cmd: JSONObject) {
         if (cmd.optString("cmd") == "audio") {
-            AudioStreamService.setWanted(cmd.optLong("pos") == 1L)
+            AudioStreamService.requestAudio(cmd.optLong("pos") == 1L)
             return
         }
         val c = MediaUtil.pick(controllers) ?: return
@@ -193,7 +193,7 @@ class MediaListenerService : NotificationListenerService() {
         Sender.post(this, json) { resp ->
             if (resp != null) {
                 // ПК сообщает, нужен ли ему звук телефона (источник «телефон»)
-                if (resp.has("audio")) AudioStreamService.setWanted(resp.optBoolean("audio"))
+                if (resp.has("audio")) AudioStreamService.requestAudio(resp.optBoolean("audio"))
                 if (sentArt != null) artSent = sentArt
                 // ПК перезапустился и обложки у него нет, отправляем заново
                 if (resp.optBoolean("needArt")) {
