@@ -485,6 +485,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        AudioStreamService.restoreIfStale(this)   // если громкость осталась выключенной после закрытия приложения
         handler.post(ticker)
     }
 
@@ -628,7 +629,9 @@ class MainActivity : Activity() {
                 AudioStreamService.wanted -> "… Подключаюсь к ПК" to 0xFFFFB020.toInt()
                 else -> "Разрешено. Передача включится, когда на ПК выбран источник «Телефон»" to 0xFF9AA0AC.toInt()
             }
-            tvAudio.text = audioText
+            tvAudio.text = audioText +
+                (if (AudioStreamService.mutedNow) "\nЗвук «Медиа» на телефоне выключен: музыка играет только на ПК" else "") +
+                (if (AudioStreamService.muteNote.isNotEmpty()) "\n" + AudioStreamService.muteNote else "")
             tvAudio.setTextColor(audioColor)
             tvConn.setTextColor(
                 when {

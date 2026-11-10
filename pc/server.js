@@ -237,6 +237,7 @@ function sourcesPayload() {
     list.push({
       id: s.id, kind: 'pc', name: s.name, available: true, playing: s.state.playing,
       detail: s.state.title ? `${s.state.title}${s.state.artist ? ' • ' + s.state.artist : ''}` : 'ничего не играет',
+      note: s.artNote ? `обложка: ${s.artNote}` : '',
     });
   }
   return {
@@ -365,6 +366,7 @@ function setPcSessions(list) {
       liked: false, canLike: false, canSeek: !!p.canSeek && duration > 0, controls: true,
       recvAt: Date.now(),
     }, art);
+    sources.get(id).artNote = str(p.artNote, 200);
   }
   for (const [id, s] of sources) {
     if (s.kind === 'pc' && !seen.has(id)) sources.delete(id);

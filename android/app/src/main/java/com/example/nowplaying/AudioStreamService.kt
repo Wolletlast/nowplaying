@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
@@ -34,6 +35,12 @@ class AudioStreamService : Service() {
 
     @Volatile
     private var gen = 0
+
+    /** Громкость «Медиа» на телефоне выключена на время передачи (звук должен играть только на ПК). */
+    @Volatile
+    private var muted = false
+
+    private val am: AudioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -68,6 +75,7 @@ class AudioStreamService : Service() {
 
     override fun onDestroy() {
         stopStreaming()
+        restoreLocal()
         try {
             projection?.stop()
         } catch (_: Exception) {
@@ -103,7 +111,33 @@ class AudioStreamService : Service() {
     }
 
     @Synchronized
+    private fun muteLocal() {
+        if (muted || muteBroken) return
+        try {
+            val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            if (cur > 0) {
+                getSharedPreferences("np_audio", Context.MODE_PRIVATE).edit().putInt("saved_vol", cur).apply()
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+            }
+            muted = true
+            mutedNow = true
+            muteNote = ""
+        } catch (e: Exception) {
+            muteNote = "не удалось выключить звук на телефоне: " + (e.message ?: "")
+        }
+    }
+
+    @Synchronized
+    private fun restoreLocal() {
+        if (!muted) return
+        muted = false
+        mutedNow = false
+        restoreSaved(this)
+    }
+
+    @Synchronized
     private fun startStreaming() {
+        muteLocal()
         val my = ++gen
         val t = Thread { streamLoop(my) }
         t.isDaemon = true
@@ -117,6 +151,7 @@ class AudioStreamService : Service() {
         thread?.interrupt()
         thread = null
         active = false
+        restoreLocal()
     }
 
     @SuppressLint("MissingPermission")
@@ -148,6 +183,8 @@ class AudioStreamService : Service() {
 
     private fun streamLoop(my: Int) {
         var rec: AudioRecord? = null
+        var silentMs = 0
+        var heardWhileMuted = false
         try {
             while (gen == my) {
                 val p = projection ?: break
@@ -175,6 +212,30 @@ class AudioStreamService : Service() {
                         if (n == 0) continue
                         out.write(buf, 0, n)
                         out.flush()
+                        if (muted) {
+                            var peak = 0
+                            var i = 0
+                            while (i + 1 < n) {
+                                val v = ((buf[i + 1].toInt() shl 8) or (buf[i].toInt() and 0xff)).toShort().toInt()
+                                val a = if (v < 0) -v else v
+                                if (a > peak) peak = a
+                                i += 8
+                            }
+                            if (peak > 0) {
+                                silentMs = 0
+                                heardWhileMuted = true
+                            } else if (am.isMusicActive) {
+                                silentMs += 40
+                                if (!heardWhileMuted && silentMs >= 8000) {
+                                    // на этом телефоне звук для передачи берётся уже с учётом громкости: вернуть громкость
+                                    muteBroken = true
+                                    muteNote = "Телефон отдаёт звук только при включенной громкости: громкость оставлена, звук идёт и на телефоне"
+                                    restoreLocal()
+                                }
+                            } else {
+                                silentMs = 0
+                            }
+                        }
                     }
                     out.close()
                 } catch (e: Exception) {
@@ -199,7 +260,10 @@ class AudioStreamService : Service() {
             } catch (_: Exception) {
             }
             synchronized(this) {
-                if (gen == my) thread = null
+                if (gen == my) {
+                    thread = null
+                    restoreLocal()
+                }
             }
             active = false
         }
@@ -225,6 +289,38 @@ class AudioStreamService : Service() {
 
         @Volatile
         var error = ""
+
+        /** Громкость «Медиа» на телефоне сейчас выключена на время передачи. */
+        @Volatile
+        var mutedNow = false
+
+        /** Выяснилось, что при громкости 0 звук для передачи пропадает: глушение отключено. */
+        @Volatile
+        var muteBroken = false
+
+        @Volatile
+        var muteNote = ""
+
+        /** Возвращает громкость «Медиа», если приложение выключило её и не успело вернуть (например, его закрыли). */
+        fun restoreSaved(ctx: Context) {
+            try {
+                val prefs = ctx.getSharedPreferences("np_audio", Context.MODE_PRIVATE)
+                val saved = prefs.getInt("saved_vol", 0)
+                if (saved > 0) {
+                    val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    if (am.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
+                        am.setStreamVolume(AudioManager.STREAM_MUSIC, saved, 0)
+                    }
+                    prefs.edit().remove("saved_vol").apply()
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        fun restoreIfStale(ctx: Context) {
+            if (instance?.muted == true) return
+            restoreSaved(ctx)
+        }
 
         fun requestAudio(on: Boolean) {
             wanted = on

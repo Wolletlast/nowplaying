@@ -19,6 +19,8 @@ try {
     Add-Type -AssemblyName System.Drawing
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
     $null = [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime]
+    $null = [Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType = WindowsRuntime]
+    $null = [Windows.Storage.Streams.RandomAccessStreamReference, Windows.Storage.Streams, ContentType = WindowsRuntime]
     Add-Type -Namespace NP -Name Win -MemberDefinition '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);'
 
     $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
@@ -37,33 +39,48 @@ try {
 
     $artCache = @{}
 
+    $script:thumbNote = ''
+    $script:iconNote = ''
+
     function ReadThumb($props) {
+        $script:thumbNote = ''
+        $ref = $null
+        try { $ref = $props.Thumbnail } catch { }
+        if (-not $ref) { $script:thumbNote = 'app gave no cover'; return $null }
+        $stream = $null
         try {
-            $ref = $props.Thumbnail
-            if (-not $ref) { return $null }
             $stream = Await ($ref.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+        } catch {
+            $script:thumbNote = 'open failed: ' + $_.Exception.Message
+            return $null
+        }
+        try {
+            $size = [uint32]$stream.Size
+            if ($size -eq 0 -or $size -gt 8000000) { $script:thumbNote = 'bad cover size ' + $size; return $null }
+            $e1 = ''
+            $e2 = ''
             try {
-                $size = [uint32]$stream.Size
-                if ($size -eq 0 -or $size -gt 8000000) { return $null }
-                try {
-                    $reader = New-Object Windows.Storage.Streams.DataReader($stream.GetInputStreamAt(0))
-                    [void](Await ($reader.LoadAsync($size)) ([uint32]))
-                    $bytes = New-Object byte[] $size
-                    $reader.ReadBytes($bytes)
-                    $reader.DetachStream() | Out-Null
-                    return [Convert]::ToBase64String($bytes)
-                } catch {
-                    $net = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
-                    $ms = New-Object System.IO.MemoryStream
-                    $net.CopyTo($ms)
-                    if ($ms.Length -eq 0) { return $null }
+                $reader = New-Object Windows.Storage.Streams.DataReader($stream.GetInputStreamAt(0))
+                [void](Await ($reader.LoadAsync($size)) ([uint32]))
+                $bytes = New-Object byte[] $size
+                $reader.ReadBytes($bytes)
+                $script:thumbNote = 'cover ' + $size + ' bytes'
+                return [Convert]::ToBase64String($bytes)
+            } catch { $e1 = $_.Exception.Message }
+            try {
+                $net = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
+                $ms = New-Object System.IO.MemoryStream
+                $net.CopyTo($ms)
+                if ($ms.Length -gt 0) {
+                    $script:thumbNote = 'cover ' + $ms.Length + ' bytes (2)'
                     return [Convert]::ToBase64String($ms.ToArray())
                 }
-            } finally {
-                $stream.Dispose()
-            }
-        } catch {
+                $e2 = 'empty'
+            } catch { $e2 = $_.Exception.Message }
+            $script:thumbNote = 'read failed: ' + $e1 + ' | ' + $e2
             return $null
+        } finally {
+            try { $stream.Dispose() } catch { }
         }
     }
 
@@ -71,7 +88,7 @@ try {
     function IconB64($path) {
         try {
             $ico = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
-            if (-not $ico) { return $null }
+            if (-not $ico) { $script:iconNote = 'no icon in file'; return $null }
             $bmp = New-Object System.Drawing.Bitmap 256, 256
             $g = [System.Drawing.Graphics]::FromImage($bmp)
             $g.SmoothingMode = 'AntiAlias'
@@ -87,12 +104,18 @@ try {
             $g.Dispose(); $br.Dispose(); $bmp.Dispose()
             return [Convert]::ToBase64String($ms.ToArray())
         } catch {
+            $script:iconNote = 'icon failed: ' + $_.Exception.Message
             return $null
         }
     }
 
     function ProcPath($p) {
-        try { return $p.MainModule.FileName } catch { return $null }
+        try { if ($p.MainModule.FileName) { return $p.MainModule.FileName } } catch { }
+        try {
+            $r = (Get-CimInstance Win32_Process -Filter ('ProcessId=' + $p.Id)).ExecutablePath
+            if ($r) { return $r }
+        } catch { }
+        return $null
     }
 
     # Session id (app user model id) -> process name, e.g. "Spotify.exe" -> "Spotify"
@@ -105,6 +128,7 @@ try {
     }
 
     function SessionIcon($id) {
+        $script:iconNote = 'process not found'
         try {
             $n = IdToProcName $id
             if (-not $n) { return $null }
@@ -156,23 +180,47 @@ try {
             canSeek  = [bool]$ctl.IsPlaybackPositionEnabled
         }
 
-        if ($artCache.ContainsKey($id) -and $artCache[$id] -eq $key) {
-            $info.artSame = $true
-        } else {
+        # cover state per app: none (not found yet) -> icon (program icon) -> thumb (real cover).
+        # A real cover that appears later (apps often send the title first) replaces the icon.
+        $c = $artCache[$id]
+        if (-not $c -or $c.key -ne $key) {
+            $c = @{ key = $key; kind = 'none'; tries = 0; hasIcon = $false; note = '' }
+            $artCache[$id] = $c
+        }
+        $hasThumb = $true
+        try { $hasThumb = [bool]$props.Thumbnail } catch { }
+        $sent = $false
+
+        if ($c.kind -ne 'thumb' -and $hasThumb -and $c.tries -lt 4) {
+            $c.tries++
             $thumb = ReadThumb $props
+            $c.note = $script:thumbNote
             if ($thumb) {
-                $artCache[$id] = $key
+                $c.kind = 'thumb'
                 $info.art = $thumb
-            } elseif (-not $props.Thumbnail) {
-                # the app really has no cover: use the program icon, remember it, do not retry every second
-                $artCache[$id] = $key
-                $icon = SessionIcon $id
-                if ($icon) { $info.art = $icon } else { $info.artSame = $false }
-            } else {
-                # cover exists but could not be read yet: try again on the next pass
-                $info.artSame = $false
+                $sent = $true
+            } elseif ($c.tries -lt 4) {
+                $c.note = $c.note + ' (retry ' + $c.tries + ')'
             }
         }
+        if (-not $sent -and $c.kind -eq 'none' -and (-not $hasThumb -or $c.tries -ge 4)) {
+            if (-not $hasThumb) { $c.note = 'app gave no cover' }
+            $icon = SessionIcon $id
+            $c.kind = 'icon'
+            if ($icon) {
+                $c.hasIcon = $true
+                $c.note = $c.note + '; program icon'
+                $info.art = $icon
+                $sent = $true
+            } else {
+                $c.note = $c.note + '; icon: ' + $script:iconNote
+            }
+        }
+        if (-not $sent) {
+            if ($c.kind -eq 'thumb' -or ($c.kind -eq 'icon' -and $c.hasIcon)) { $info.artSame = $true }
+            else { $info.artSame = $false }
+        }
+        $info.artNote = [string]$c.note
         return $info
     }
 
