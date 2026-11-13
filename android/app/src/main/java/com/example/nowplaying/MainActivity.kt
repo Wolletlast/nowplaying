@@ -116,14 +116,14 @@ class MainActivity : Activity() {
     private fun pressable(color: Int, radius: Int) =
         RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), rounded(color, radius), rounded(Color.WHITE, radius))
 
-    private fun pill(label: String, accent: Boolean = false, onClick: () -> Unit) = TextView(this).apply {
+    private fun pill(label: String, accent: Boolean = false, color: Int = ACCENT, tall: Boolean = false, onClick: () -> Unit) = TextView(this).apply {
         text = label
         textSize = 14f
         setTextColor(Color.WHITE)
         typeface = Typeface.DEFAULT_BOLD
         gravity = Gravity.CENTER
-        setPadding(dp(16), dp(11), dp(16), dp(11))
-        background = pressable(if (accent) ACCENT else 0x2EFFFFFF, dp(22))
+        setPadding(dp(16), dp(if (tall) 14 else 11), dp(16), dp(if (tall) 14 else 11))
+        background = pressable(if (accent) color else 0x2EFFFFFF, dp(if (tall) 24 else 22))
         isClickable = true
         setOnClickListener { onClick() }
     }
@@ -291,10 +291,10 @@ class MainActivity : Activity() {
     private fun card(title: String, description: String) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(18), dp(16), dp(18), dp(18))
-        background = rounded(0xFF181A21.toInt(), dp(20))
+        background = rounded(0x12FFFFFF, dp(20)).apply { setStroke(dp(1), 0x14FFFFFF) }
         addView(text(16f, Color.WHITE, bold = true).also { it.text = title })
         addView(
-            text(13f, 0xFF9AA0AC.toInt()).apply { text = description },
+            text(13f, S_MUTED).apply { text = description },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) }
         )
     }
@@ -311,8 +311,9 @@ class MainActivity : Activity() {
             addView(pill("← Назад") { showSettings(false) })
             addView(
                 text(22f, Color.WHITE, bold = true).apply { text = "Настройки" },
-                LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(16) }
+                LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) }
             )
+            addView(VinylView(this@MainActivity), LinearLayout.LayoutParams(dp(40), dp(40)))
         }
         col.addView(header, LinearLayout.LayoutParams(-1, -2))
 
@@ -321,13 +322,13 @@ class MainActivity : Activity() {
         val c1 = card("1. Доступ к уведомлениям", "Нужен, чтобы приложение видело, что играет, и могло управлять плеером.")
         c1.addView(tvAccess, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         c1.addView(
-            pill("Открыть настройки доступа", accent = true) {
+            pill("Открыть настройки доступа", accent = true, color = S_ACCENT, tall = true) {
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
         )
         c1.addView(
-            text(12f, 0xFF7C8390.toInt()).apply {
+            text(12f, S_MUTED2).apply {
                 text = "Если Android пишет «ограниченная настройка»: Настройки → Приложения → NowPlaying → ⋮ → «Разрешить ограниченные настройки»."
             },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) }
@@ -337,7 +338,7 @@ class MainActivity : Activity() {
         // ---- 2. работа в фоне ----
         val c2 = card("2. Работа в фоне", "Чтобы Android не отключал связь с ПК при выключенном экране.")
         c2.addView(
-            pill("Открыть настройки приложения") {
+            pill("Открыть настройки приложения", tall = true) {
                 startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
                 )
@@ -345,7 +346,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
         )
         c2.addView(
-            text(12f, 0xFF7C8390.toInt()).apply { text = "Там откройте «Батарея» и выберите «Без ограничений»." },
+            text(12f, S_MUTED2).apply { text = "Там откройте «Батарея» и выберите «Без ограничений»." },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) }
         )
         col.addView(c2, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
@@ -355,27 +356,27 @@ class MainActivity : Activity() {
         val c3 = card("3. Связь с ПК", "Телефон ищет компьютер сам: NowPlaying должен быть запущен на ПК в той же Wi-Fi сети.")
         c3.addView(tvConn, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         c3.addView(
-            text(12f, 0xFF7C8390.toInt()).apply { text = "IP компьютера (нужен, только если автопоиск не сработал):" },
+            text(12f, S_MUTED2).apply { text = "IP компьютера (нужен, только если автопоиск не сработал):" },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
         )
         etHost = EditText(this).apply {
             hint = "например 192.168.1.50"
-            setHintTextColor(0xFF6C7280.toInt())
+            setHintTextColor(S_MUTED2)
             setTextColor(Color.WHITE)
             textSize = 15f
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
-            background = rounded(0xFF22252D.toInt(), dp(14))
-            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = rounded(0x47000000, dp(14)).apply { setStroke(dp(1), 0x24FFFFFF) }
+            setPadding(dp(14), dp(14), dp(14), dp(14))
             setText(Sender.host(this@MainActivity))
         }
         c3.addView(etHost, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
 
-        val save = pill("Сохранить") {
+        val save = pill("Сохранить", tall = true) {
             Sender.saveHost(this, etHost.text.toString())
             Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show()
         }
-        val test = pill("Проверить связь", accent = true) { testConnection() }
+        val test = pill("Проверить связь", accent = true, color = S_ACCENT, tall = true) { testConnection() }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(save, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
@@ -393,12 +394,12 @@ class MainActivity : Activity() {
         c4.addView(tvAudio, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         val audioRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(pill("Разрешить", accent = true) { enableAudio() }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
-            addView(pill("Выключить") { stopService(Intent(this@MainActivity, AudioStreamService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(6) })
+            addView(pill("Разрешить", accent = true, color = S_ACCENT, tall = true) { enableAudio() }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+            addView(pill("Выключить", tall = true) { stopService(Intent(this@MainActivity, AudioStreamService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(6) })
         }
         c4.addView(audioRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         c4.addView(
-            text(12f, 0xFF7C8390.toInt()).apply {
+            text(12f, S_MUTED2).apply {
                 text = "Нажмите «Разрешить» и в системном окне подтвердите «Начать». Это нужно один раз после каждого перезапуска телефона или приложения. " +
                     "Некоторые приложения запрещают перехват своего звука, тогда звук не пойдёт. Голос и звонки не передаются. " +
                     "Чтобы звук не играл ещё и на телефоне, уберите громкость на телефоне или подключите к нему наушники."
@@ -408,7 +409,7 @@ class MainActivity : Activity() {
         col.addView(c4, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
 
         return ScrollView(this).apply {
-            setBackgroundColor(BG)
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(S_TOP, S_BOTTOM))
             addView(col, FrameLayout.LayoutParams(-1, -2))
         }
     }
@@ -451,6 +452,8 @@ class MainActivity : Activity() {
     private fun showSettings(show: Boolean) {
         settingsPage.visibility = if (show) View.VISIBLE else View.GONE
         playerPage.visibility = if (show) View.GONE else View.VISIBLE
+        window.statusBarColor = if (show) S_TOP else BG
+        window.navigationBarColor = if (show) S_BOTTOM else BG
         refresh()
     }
 
@@ -656,5 +659,12 @@ class MainActivity : Activity() {
         private const val BG = 0xFF0E0F13.toInt()
         private const val ACCENT = 0xFF4F6BFF.toInt()
         private const val DEFAULT_TINT = 0xFF2A2140.toInt()
+
+        // стиль экрана настроек (как у виджета на ПК)
+        private const val S_TOP = 0xFF1D1842.toInt()
+        private const val S_BOTTOM = 0xFF0D0B1C.toInt()
+        private const val S_ACCENT = 0xFFC23A62.toInt()
+        private const val S_MUTED = 0xFFA9A6C8.toInt()
+        private const val S_MUTED2 = 0xFF8F8CAE.toInt()
     }
 }

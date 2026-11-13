@@ -6,45 +6,60 @@
 <title>NowPlaying — настройки</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: #101218; color: #e9ebf0; font: 14px/1.35 "Segoe UI", system-ui, sans-serif; }
-  body { padding: 18px 20px 28px; max-width: 560px; margin: 0 auto; }
-  h1 { font-size: 18px; margin-bottom: 14px; }
-  section { background: #181b23; border-radius: 14px; padding: 14px 14px 12px; margin-bottom: 14px; }
-  h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #8e96a6; margin-bottom: 10px; font-weight: 600; }
-  h3 { font-size: 12px; color: #8e96a6; margin: 12px 0 6px; font-weight: 600; }
-  .note { font-size: 12px; color: #8e96a6; margin-top: 8px; }
+  :root { --muted: #a9a6c8; --muted2: #8f8cae; --accent: #d2466e; --card: rgba(255,255,255,.07); --line: rgba(255,255,255,.08); }
+  html { background: #0d0b1c; }
+  html, body { color: #fff; font: 14px/1.35 "Segoe UI", system-ui, sans-serif; min-height: 100%; }
+  body { background: linear-gradient(160deg, #1d1842, #0d0b1c 70%) fixed; padding: 20px 22px 30px; max-width: 560px; margin: 0 auto; }
+  ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+
+  .head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  h1 { font-size: 20px; font-weight: 700; flex: 1; }
+  .logo { width: 44px; height: 44px; border-radius: 50%; flex: none; display: grid; place-items: center; box-shadow: 0 6px 16px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.12);
+    background: repeating-radial-gradient(circle, #0b0b0d 0 2px, #1a1a1f 2px 3px); }
+  .logo i { width: 36%; height: 36%; border-radius: 50%; background: radial-gradient(#0d0b1c 0 9%, var(--accent) 10%); }
+
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px 16px 14px; margin-bottom: 14px; }
+  h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+  h3 { font-size: 12px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+  .note { font-size: 12px; color: var(--muted2); margin-top: 10px; }
   .err { font-size: 12px; color: #ff8a8a; margin-top: 8px; }
 
   .opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; cursor: pointer;
-    background: #20242e; color: inherit; font: inherit; border-radius: 10px; padding: 9px 12px; margin-bottom: 6px; }
-  .opt:hover { background: #272c38; }
-  .opt.on { background: #2c3a78; box-shadow: inset 0 0 0 1.5px #4f6bff; }
-  .opt .dot { width: 8px; height: 8px; border-radius: 50%; background: #4a5060; flex: none; }
+    background: rgba(255,255,255,.07); color: inherit; font: inherit; border-radius: 14px; padding: 10px 14px; margin-bottom: 6px; transition: background .15s; }
+  .opt:hover { background: rgba(255,255,255,.13); }
+  .opt.on { background: rgba(210,70,110,.2); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .opt .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.28); flex: none; }
   .opt .dot.live { background: #3ddc84; }
   .opt .txt { flex: 1; min-width: 0; }
   .opt .name { font-weight: 600; }
-  .opt .det { font-size: 12px; color: #9aa2b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .opt .det { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .opt.na { opacity: .55; }
-  .opt .tag { font-size: 11px; color: #9aa2b2; flex: none; }
+  .opt .tag { font-size: 11px; color: var(--muted); flex: none; }
 
-  .row { display: flex; align-items: center; gap: 10px; min-height: 30px; }
-  .row > span { width: 110px; color: #aab0bb; flex: none; }
-  .row .val { width: 44px; text-align: right; color: #aab0bb; flex: none; }
-  input[type=range] { flex: 1; min-width: 0; accent-color: #4f6bff; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip, .btn { border: 0; cursor: pointer; font: inherit; color: #fff; background: #2a2f3b; border-radius: 999px; padding: 7px 14px; }
-  .chip:hover, .btn:hover { background: #343a49; }
-  .chip.on { background: #4f6bff; }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 34px; }
+  .row > span { width: 110px; color: var(--muted); flex: none; }
+  .row .val { width: 44px; text-align: right; color: var(--muted); flex: none; font-weight: 600; }
+  input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 4px; border-radius: 2px; cursor: pointer; outline: none;
+    background: linear-gradient(90deg, #fff var(--p, 50%), rgba(255,255,255,.28) var(--p, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(80,110,255,.55); }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(80,110,255,.9); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip, .btn { border: 0; cursor: pointer; font: inherit; font-weight: 600; color: #fff; background: rgba(255,255,255,.14); border-radius: 999px; padding: 9px 18px; transition: background .15s, transform .1s; }
+  .chip:hover, .btn:hover { background: rgba(255,255,255,.24); }
+  .chip:active, .btn:active { transform: scale(.96); }
+  .chip:focus-visible, .btn:focus-visible, .opt:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .chip.on { background: #fff; color: #1a1536; }
   .btn.danger { background: rgba(255,77,109,.3); }
+  .btn.danger:hover { background: rgba(255,77,109,.45); }
   .btn:disabled { opacity: .5; cursor: default; }
-  .corners { display: flex; gap: 6px; }
-  .corners button { width: 44px; padding: 7px 0; text-align: center; }
-  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .empty { font-size: 13px; color: #8e96a6; padding: 6px 2px; }
+  .corners { display: flex; gap: 8px; }
+  .corners button { width: 46px; padding: 9px 0; text-align: center; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .empty { font-size: 13px; color: var(--muted2); padding: 6px 2px; }
 </style>
 </head>
 <body>
-<h1>NowPlaying — настройки</h1>
+<div class="head"><div class="logo" aria-hidden="true"><i></i></div><h1>NowPlaying — настройки</h1></div>
 
 <section>
   <h2>Источник музыки</h2>
@@ -105,6 +120,9 @@ const $ = (s) => document.querySelector(s);
 const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NP': '1' }, body: JSON.stringify(body || {}) }).then((r) => r.json().catch(() => ({}))).catch(() => ({}));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let cfg = null, src = null, aud = null;
+const paint = (r) => r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min) * 100) + '%');
+const paintAll = () => document.querySelectorAll('input[type=range]').forEach(paint);
+document.addEventListener('input', (e) => { if (e.target.type === 'range') paint(e.target); });
 
 function opt(id, name, det, o) {
   const on = src && src.selected === id;
@@ -157,6 +175,7 @@ function renderConfig() {
   $('#stream').classList.toggle('on', cfg.streamAudio);
   if (document.activeElement !== $('#volume')) $('#volume').value = cfg.volume;
   $('#volumeV').textContent = cfg.volume + '%';
+  paintAll();
   renderAudioState();
 }
 

@@ -1,9 +1,10 @@
 'use strict';
 // Окно-оверлей NowPlaying (Electron). Вся логика приёма данных - в server.js, интерфейс - в ui/index.html.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, dialog, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, dialog, shell, ipcMain } = require('electron');
 const path = require('path');
 const server = require('./server');
 const pcmedia = require('./pcmedia');
+const snap = require('./snap');
 
 const BASE_W = 420;
 const BASE_H = 150;
@@ -56,13 +57,17 @@ function createWindow() {
     frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false,
     resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
     skipTaskbar: true, alwaysOnTop: true, show: false,
-    webPreferences: { backgroundThrottling: false },
+    webPreferences: { backgroundThrottling: false, preload: path.join(__dirname, 'preload.js') },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setMenuBarVisibility(false);
   win.loadURL(`http://127.0.0.1:${server.PORT}/`);
   win.webContents.on('did-finish-load', () => { applyLayout(); updateVisibility(); });
-  win.on('moved', onMoved);
+  ipcMain.on('np-drag', (e, phase) => {
+    if (!win || win.isDestroyed() || e.sender !== win.webContents) return;
+    if (phase === 'start') dragStart();
+    else if (phase === 'end') dragEnd();
+  });
 }
 
 // Невидимое окно-«динамик»: играет звук, который телефон присылает на ПК (ui/player.html).
@@ -99,7 +104,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 560, height: 740, minWidth: 420, minHeight: 480,
-    title: 'NowPlaying — настройки', backgroundColor: '#101218', autoHideMenuBar: true,
+    title: 'NowPlaying — настройки', backgroundColor: '#0d0b1c', autoHideMenuBar: true,
     webPreferences: { backgroundThrottling: true },
   });
   settingsWin.setMenuBarVisibility(false);
@@ -110,6 +115,7 @@ function openSettings() {
 // ---------- расположение ----------
 function applyLayout() {
   if (!win) return;
+  stopFlight();
   const cfg = server.getConfig();
   const s = cfg.scale / 100;
   const w = Math.round(BASE_W * s);
@@ -134,10 +140,61 @@ function applyLayout() {
   setTimeout(() => { applying = false; }, 400);
 }
 
-function onMoved() {
-  if (applying || !win) return;
-  const [x, y] = win.getPosition();
-  server.updateConfig({ corner: 'custom', pos: { x, y } }, 'drag');
+// ---------- перетаскивание: бросок к углу ----------
+// Пока карточка «взята», окно следует за курсором (опрос ~120 Гц). При отпускании по скорости
+// и положению выбирается угол, окно летит к нему на пружине и встаёт с отступом MARGIN от краёв.
+let drag = null;
+let flight = null;
+
+function stopFlight() {
+  if (flight) { clearInterval(flight.timer); flight = null; }
+}
+
+function dragStart() {
+  if (!win || win.isDestroyed()) return;
+  stopFlight();
+  if (drag) clearInterval(drag.timer);
+  const b = win.getBounds();
+  const c = screen.getCursorScreenPoint();
+  drag = { offX: c.x - b.x, offY: c.y - b.y, w: b.width, h: b.height, x0: b.x, y0: b.y, samples: [], moved: false, timer: null };
+  const tick = () => {
+    if (!drag || win.isDestroyed()) return;
+    const p = screen.getCursorScreenPoint();
+    const x = p.x - drag.offX;
+    const y = p.y - drag.offY;
+    drag.samples.push({ t: performance.now(), x, y });
+    if (drag.samples.length > 16) drag.samples.shift();
+    if (!drag.moved && Math.hypot(x - drag.x0, y - drag.y0) > 4) drag.moved = true;   // меньше 4 px - это просто клик
+    if (drag.moved) win.setBounds({ x, y, width: drag.w, height: drag.h });
+  };
+  drag.timer = setInterval(tick, 8);
+  tick();
+}
+
+function dragEnd() {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  clearInterval(d.timer);
+  if (!win || win.isDestroyed() || !d.moved) return;
+
+  const b = win.getBounds();
+  const v = snap.velocity(d.samples, performance.now());
+  const display = screen.getDisplayNearestPoint({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  const corner = snap.pickCorner(b, v, display.workArea);
+  const to = snap.cornerPos(corner, b, display.workArea, MARGIN);
+  const f = snap.makeFlight({ x: b.x, y: b.y }, to, v);
+  const t0 = performance.now();
+  flight = { timer: setInterval(() => {
+    if (!win || win.isDestroyed()) { stopFlight(); return; }
+    const s = snap.flightAt(f, (performance.now() - t0) / 1000);
+    win.setBounds({ x: s.x, y: s.y, width: b.width, height: b.height });
+    if (s.done) stopFlight();
+  }, 8) };
+
+  // на основном мониторе запоминаем угол, на другом - точную позицию
+  const onPrimary = display.id === screen.getPrimaryDisplay().id;
+  server.updateConfig(onPrimary ? { corner, pos: null } : { corner: 'custom', pos: { x: to.x, y: to.y } }, 'drag');
 }
 
 function onConfig(cfg, keys, source) {

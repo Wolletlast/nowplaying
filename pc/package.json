@@ -27,6 +27,8 @@
       "package.json",
       "winps.js",
       "pcmedia.js",
+      "snap.js",
+      "preload.js",
       "ps/**/*"
     ],
     "win": {
